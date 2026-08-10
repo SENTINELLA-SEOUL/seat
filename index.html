@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SENTINELLA</title>
+<style>
+    body { font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; margin: 0; padding: 15px; background-color: #f4f6f8; color: #333; }
+    
+    /* 타이틀 영역 영문 폰트 스타일 강화 */
+    .header-title { display: flex; align-items: center; justify-content: center; margin-bottom: 20px; font-size: 24px; font-weight: 900; font-family: 'Arial Black', 'Impact', sans-serif; letter-spacing: 1px; }
+    .header-logo { width: 36px; height: 36px; border-radius: 50%; margin-right: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+
+    h3 { font-size: 16px; margin-top: 0; margin-bottom: 12px; color: #444; }
+    
+    .section { background: white; padding: 15px; border-radius: 12px; margin-bottom: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+    
+    /* 참석자 선택 영역 */
+    .member-toggle-list { display: flex; flex-wrap: wrap; gap: 8px; max-height: 150px; overflow-y: auto; padding-bottom: 5px; }
+    .member-btn { padding: 6px 12px; border: 1px solid #ccc; border-radius: 20px; background: #fff; cursor: pointer; color: #888; font-size: 13px; transition: all 0.2s; }
+    .member-btn.active { background: #E60024; color: #fff; border-color: #E60024; font-weight: bold; }
+    .member-summary { font-size: 14px; font-weight: bold; color: #E60024; margin-bottom: 10px; }
+
+    /* 툴바 및 컨트롤 */
+    .toolbar { display: flex; gap: 8px; margin-bottom: 15px; overflow-x: auto; padding-bottom: 5px; }
+    .tool-btn { flex: 1; padding: 10px 5px; border: 1px solid #ccc; background: white; border-radius: 8px; font-size: 13px; cursor: pointer; white-space: nowrap; }
+    .tool-btn.active { background: #111; color: white; border-color: #111; font-weight: bold; }
+    
+    .grid-controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 14px; }
+    .grid-controls input { width: 40px; text-align: center; padding: 4px; border: 1px solid #ccc; border-radius: 4px; }
+    
+    /* 좌석 바둑판 영역 (워터마크 추가) */
+    .grid-wrapper { position: relative; display: flex; justify-content: center; min-height: 250px; }
+    
+    /* 워터마크 CSS */
+    .grid-wrapper::before {
+        content: "";
+        position: absolute;
+        top: 50%; left: 50%;
+        transform: translate(-50%, -50%);
+        width: 200px; height: 200px;
+        background-image: url('Sentinella.jpg');
+        background-size: contain;
+        background-position: center;
+        background-repeat: no-repeat;
+        opacity: 0.08; 
+        pointer-events: none; 
+        z-index: 0;
+    }
+
+    .grid-container { display: grid; gap: 8px; justify-content: center; margin-top: 10px; z-index: 1; }
+    .seat { 
+        width: 50px; height: 50px; border: 2px solid #ddd; background: rgba(255, 255, 255, 0.85); 
+        border-radius: 8px; display: flex; align-items: center; justify-content: center; 
+        font-size: 13px; font-weight: bold; cursor: pointer; position: relative;
+        transition: all 0.2s; user-select: none;
+    }
+    .seat.disabled { border: 1px dashed #ccc; background: transparent; color: transparent; pointer-events: auto; }
+    
+    .seat.assigned { background: #e0e0e0; color: #000; border-color: #bbb; }
+    
+    .flag { position: absolute; top: -8px; right: -8px; font-size: 16px; text-shadow: 1px 1px 2px rgba(0,0,0,0.3); pointer-events: none; }
+
+    /* 팝업(모달) */
+    .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 99; }
+    .modal { display: none; position: fixed; bottom: 0; left: 0; width: 100%; background: white; border-radius: 20px 20px 0 0; padding: 20px; box-sizing: border-box; z-index: 100; box-shadow: 0 -4px 10px rgba(0,0,0,0.1); max-height: 50vh; overflow-y: auto; }
+    .modal.active, .modal-overlay.active { display: block; }
+    
+    .attendee-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 15px; }
+    .attendee-chip { padding: 8px 14px; border: 1px solid #E60024; color: #E60024; background: white; border-radius: 20px; font-size: 14px; cursor: pointer; font-weight: bold; }
+    .attendee-chip.assigned { border-color: #eee; color: #bbb; background: #fafafa; text-decoration: line-through; pointer-events: none; font-weight: normal; }
+    
+    .close-btn { width: 100%; padding: 12px; background: #111; color: white; border: none; border-radius: 8px; margin-top: 20px; cursor: pointer; font-weight: bold; font-size: 15px; }
+</style>
+</head>
+<body>
+
+<div class="header-title">
+    <img src="Sentinella.jpg" alt="로고" class="header-logo">
+    SENTINELLA
+</div>
+
+<div class="section">
+    <h3>1. 참석자 선택</h3>
+    <div class="member-summary">현재 참석 인원: <span id="attendeeCount">0</span>명</div>
+    <div id="memberToggles" class="member-toggle-list"></div>
+</div>
+
+<div class="section">
+    <h3>2. 좌석 배치</h3>
+    <div class="grid-controls">
+        <span>가로: <input type="number" id="cols" value="6" min="1" max="15" onchange="generateGrid()"> 열</span>
+        <span>세로: <input type="number" id="rows" value="5" min="1" max="15" onchange="generateGrid()"> 행</span>
+        <button onclick="resetSeats()" style="padding: 4px 8px; border-radius:4px; border:1px solid #ccc; background: white; font-size: 12px;">좌석 초기화</button>
+    </div>
+    
+    <div class="toolbar">
+        <button id="mode-seat" class="tool-btn active" onclick="setMode('seat')">👤 배치</button>
+        <button id="mode-disable" class="tool-btn" onclick="setMode('disable')">✖️ 사석</button>
+        <button id="mode-flag" class="tool-btn" onclick="setMode('flag')">🚩 깃발</button>
+    </div>
+
+    <div class="grid-wrapper">
+        <div id="seatGrid" class="grid-container"></div>
+    </div>
+</div>
+
+<div id="modalOverlay" class="modal-overlay" onclick="closeModal()"></div>
+<div id="nameModal" class="modal">
+    <h3 style="margin-top: 0; text-align: center;">배치할 인원 선택</h3>
+    <div id="attendeeContainer" class="attendee-list"></div>
+    <button class="close-btn" onclick="closeModal()">닫기</button>
+</div>
+
+<script>
+    const STORAGE_KEY = 'sentinella_seat_data_v1';
+    const ALL_MEMBERS = [
+        "강태원", "곽한솔", "권오연", "김경민", "김경호", "김수정", "김연준", "김우석", 
+        "김유빈", "김재엽", "김태양", "김현수", "김효은", "노승욱", "박성진", "박준한", 
+        "서석호", "성민호", "송채원", "심현보", "양건모", "오원식", "임혜린", "조민준", 
+        "조윤경", "차성환", "최윤혁", "최재서", "최준식", "추성훈", "한형서", "홍우석", "황혜원"
+    ];
+
+    let state = { cols: 6, rows: 5, members: {}, seats: {} };
+    let currentMode = 'seat';
+    let targetSeatId = null;
+
+    function init() {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+            state = JSON.parse(saved);
+            ALL_MEMBERS.forEach(name => { if(state.members[name] === undefined) state.members[name] = false; });
+        } else {
+            ALL_MEMBERS.forEach(name => state.members[name] = false);
+            generateGridData();
+        }
+        
+        document.getElementById('cols').value = state.cols;
+        document.getElementById('rows').value = state.rows;
+        
+        renderMemberToggles();
+        renderGrid();
+    }
+
+    function saveState() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+
+    function renderMemberToggles() {
+        const container = document.getElementById('memberToggles');
+        container.innerHTML = '';
+        let count = 0;
+
+        ALL_MEMBERS.forEach(name => {
+            const isAttending = state.members[name];
+            if(isAttending) count++;
+
+            const btn = document.createElement('button');
+            btn.className = `member-btn ${isAttending ? 'active' : ''}`;
+            btn.innerText = name;
+            btn.onclick = () => toggleMember(name);
+            container.appendChild(btn);
+        });
+        document.getElementById('attendeeCount').innerText = count;
+    }
+
+    function toggleMember(name) {
+        state.members[name] = !state.members[name];
+        if (!state.members[name]) {
+            for (let seatId in state.seats) {
+                if (state.seats[seatId].assignee === name) state.seats[seatId].assignee = null;
+            }
+            renderGrid();
+        }
+        saveState();
+        renderMemberToggles();
+    }
+
+    function generateGridData() {
+        state.seats = {};
+        for(let r=0; r<state.rows; r++) {
+            for(let c=0; c<state.cols; c++) {
+                state.seats[`${r}-${c}`] = { disabled: false, assignee: null, hasFlag: false };
+            }
+        }
+        saveState();
+    }
+
+    function generateGrid() {
+        state.cols = parseInt(document.getElementById('cols').value) || 6;
+        state.rows = parseInt(document.getElementById('rows').value) || 5;
+        generateGridData();
+        renderGrid();
+    }
+
+    function renderGrid() {
+        const grid = document.getElementById('seatGrid');
+        grid.style.gridTemplateColumns = `repeat(${state.cols}, 50px)`;
+        grid.innerHTML = '';
+
+        for(let r=0; r<state.rows; r++) {
+            for(let c=0; c<state.cols; c++) {
+                const seatId = `${r}-${c}`;
+                const seatData = state.seats[seatId] || { disabled: false, assignee: null, hasFlag: false };
+                
+                const div = document.createElement('div');
+                div.className = 'seat';
+                
+                if (seatData.disabled) {
+                    div.classList.add('disabled');
+                } else if (seatData.assignee) {
+                    div.classList.add('assigned');
+                    div.innerText = seatData.assignee; 
+                }
+                
+                if (seatData.hasFlag && !seatData.disabled) {
+                    const flag = document.createElement('div');
+                    flag.className = 'flag';
+                    flag.innerText = '🚩';
+                    div.appendChild(flag);
+                }
+
+                div.onclick = () => handleSeatClick(seatId);
+                grid.appendChild(div);
+            }
+        }
+    }
+
+    function setMode(mode) {
+        currentMode = mode;
+        document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
+        document.getElementById(`mode-${mode}`).classList.add('active');
+    }
+
+    function handleSeatClick(seatId) {
+        if (!state.seats[seatId]) state.seats[seatId] = { disabled: false, assignee: null, hasFlag: false };
+        const seat = state.seats[seatId];
+
+        if (currentMode === 'disable') {
+            seat.disabled = !seat.disabled;
+            if (seat.disabled) { seat.assignee = null; seat.hasFlag = false; }
+            saveState(); renderGrid();
+        } 
+        else if (currentMode === 'flag') {
+            if (seat.disabled) return;
+            seat.hasFlag = !seat.hasFlag;
+            saveState(); renderGrid();
+        }
+        else if (currentMode === 'seat') {
+            if (seat.disabled) return;
+            if (seat.assignee) {
+                seat.assignee = null;
+                saveState(); renderGrid();
+            } else {
+                targetSeatId = seatId; openModal();
+            }
+        }
+    }
+
+    function openModal() {
+        const container = document.getElementById('attendeeContainer');
+        container.innerHTML = '';
+        
+        const attendingNames = ALL_MEMBERS.filter(name => state.members[name]);
+        
+        if (attendingNames.length === 0) {
+            container.innerHTML = '<p style="font-size:14px; color:#666; width:100%; text-align:center;">1단계에서 참석자를 먼저 선택해주세요.</p>';
+        } else {
+            const assignedNames = Object.values(state.seats).map(s => s.assignee).filter(n => n);
+
+            attendingNames.forEach(name => {
+                const isAssigned = assignedNames.includes(name);
+                const chip = document.createElement('div');
+                chip.className = `attendee-chip ${isAssigned ? 'assigned' : ''}`;
+                chip.innerText = name;
+                if (!isAssigned) chip.onclick = () => assignSeat(name);
+                container.appendChild(chip);
+            });
+        }
+        document.getElementById('nameModal').classList.add('active');
+        document.getElementById('modalOverlay').classList.add('active');
+    }
+
+    function assignSeat(name) {
+        if (targetSeatId) { state.seats[targetSeatId].assignee = name; saveState(); renderGrid(); }
+        closeModal();
+    }
+
+    function closeModal() {
+        document.getElementById('nameModal').classList.remove('active');
+        document.getElementById('modalOverlay').classList.remove('active');
+        targetSeatId = null;
+    }
+
+    function resetSeats() {
+        if(confirm('배치된 좌석과 사석 데이터가 모두 초기화됩니다. 계속하시겠습니까?')) {
+            generateGridData(); renderGrid();
+        }
+    }
+
+    window.onload = init;
+</script>
+</body>
+</html>
